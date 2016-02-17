@@ -8,7 +8,7 @@ import (
 )
 
 type NumericHistogram struct {
-	bins    []bin
+	bins    []Bin
 	maxbins int
 	total   uint64
 }
@@ -19,7 +19,7 @@ type NumericHistogram struct {
 // should be sufficient.
 func NewHistogram(n int) *NumericHistogram {
 	return &NumericHistogram{
-		bins:    make([]bin, 0, n+1),
+		bins:    make([]Bin, 0, n+1),
 		maxbins: n,
 		total:   0,
 	}
@@ -33,34 +33,34 @@ func (h *NumericHistogram) Reset() {
 func (h *NumericHistogram) Add(n float64) {
 	h.total++
 	for i, bini := range h.bins {
-		if bini.value == n {
-			h.bins[i].count++
+		if bini.Value == n {
+			h.bins[i].Count++
 			return
 		}
 
-		if bini.value > n {
+		if bini.Value > n {
 			// Insert a bin at i
 			tail := h.bins[i:]
 			h.bins = h.bins[0 : len(h.bins)+1]
 			copy(h.bins[i+1:], tail)
-			h.bins[i] = bin{value: n, count: 1}
+			h.bins[i] = Bin{Value: n, Count: 1}
 
 			h.trim()
 			return
 		}
 	}
 
-	h.bins = append(h.bins, bin{count: 1, value: n})
+	h.bins = append(h.bins, Bin{Count: 1, Value: n})
 	h.trim()
 }
 
 func (h *NumericHistogram) Quantile(q float64) float64 {
 	count := q * float64(h.total)
 	for i := range h.bins {
-		count -= float64(h.bins[i].count)
+		count -= float64(h.bins[i].Count)
 
 		if count <= 0 {
-			return h.bins[i].value
+			return h.bins[i].Value
 		}
 	}
 
@@ -72,8 +72,8 @@ func (h *NumericHistogram) Quantile(q float64) float64 {
 func (h *NumericHistogram) CDF(x float64) float64 {
 	count := 0.0
 	for i := range h.bins {
-		if h.bins[i].value <= x {
-			count += float64(h.bins[i].count)
+		if h.bins[i].Value <= x {
+			count += float64(h.bins[i].Count)
 		}
 	}
 
@@ -89,7 +89,7 @@ func (h *NumericHistogram) Mean() float64 {
 	sum := 0.0
 
 	for i := range h.bins {
-		sum += h.bins[i].value * h.bins[i].count
+		sum += h.bins[i].Value * float64(h.bins[i].Count)
 	}
 
 	return sum / float64(h.total)
@@ -105,14 +105,14 @@ func (h *NumericHistogram) Variance() float64 {
 	mean := h.Mean()
 
 	for i := range h.bins {
-		sum += (h.bins[i].count * (h.bins[i].value - mean) * (h.bins[i].value - mean))
+		sum += (float64(h.bins[i].Count) * (h.bins[i].Value - mean) * (h.bins[i].Value - mean))
 	}
 
 	return sum / float64(h.total)
 }
 
-func (h *NumericHistogram) Count() float64 {
-	return float64(h.total)
+func (h *NumericHistogram) Count() uint64 {
+	return h.total
 }
 
 // trim merges adjacent bins to decrease the bin count to the maximum value
@@ -122,14 +122,14 @@ func (h *NumericHistogram) trim() {
 	}
 	for len(h.bins) > h.maxbins {
 		// Find closest bins in terms of value
-		minDelta := h.bins[1].value - h.bins[0].value
+		minDelta := h.bins[1].Value - h.bins[0].Value
 		minDeltaIndex := 1
 		for i := 2; i < len(h.bins); i++ {
 			if i <= 1 {
 				continue
 			}
 
-			if delta := h.bins[i].value - h.bins[i-1].value; delta < minDelta {
+			if delta := h.bins[i].Value - h.bins[i-1].Value; delta < minDelta {
 				minDelta = delta
 				minDeltaIndex = i
 			}
@@ -139,14 +139,14 @@ func (h *NumericHistogram) trim() {
 		binMinDeltaIdx := h.bins[minDeltaIndex]
 
 		// We need to merge bins minDeltaIndex-1 and minDeltaIndex
-		totalCount := binMinDeltaIdxSub1.count + binMinDeltaIdx.count
-		mergedbin := bin{
-			value: (binMinDeltaIdxSub1.value*
-				binMinDeltaIdxSub1.count +
-				binMinDeltaIdx.value*
-					binMinDeltaIdx.count) /
-				totalCount, // weighted average
-			count: totalCount, // summed heights
+		totalCount := binMinDeltaIdxSub1.Count + binMinDeltaIdx.Count
+		mergedbin := Bin{
+			Value: (binMinDeltaIdxSub1.Value*
+				float64(binMinDeltaIdxSub1.Count) +
+				binMinDeltaIdx.Value*
+					float64(binMinDeltaIdx.Count)) /
+				float64(totalCount), // weighted average
+			Count: totalCount, // summed heights
 		}
 
 		// Now remove bin minDeltaIndex by replacing minDeltaIndex-1 with mergedbin
@@ -165,11 +165,15 @@ func (h *NumericHistogram) String() (str string) {
 
 	for i := range h.bins {
 		var bar string
-		for j := 0; j < int(float64(h.bins[i].count)/float64(h.total)*200); j++ {
+		for j := 0; j < int(float64(h.bins[i].Count)/float64(h.total)*200); j++ {
 			bar += "."
 		}
-		str += fmt.Sprintln(h.bins[i].value, "\t", bar)
+		str += fmt.Sprintln(h.bins[i].Value, "\t", bar)
 	}
 
 	return
+}
+
+func (h *NumericHistogram) Bins() []Bin {
+	return h.bins
 }

@@ -11,9 +11,11 @@ type Histogram interface {
 
 	// Quantile returns an approximation.
 	Quantile(n float64) (q float64)
+
+	Bins() []Bin
 }
 
-type bin struct {
-	value float64
-	count float64
+type Bin struct {
+	Value float64
+	Count uint64
 }
